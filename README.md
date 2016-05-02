@@ -1,2 +1,2 @@
 # team-r
-Data analysis project
+All analysis related to digital marketing efforts
