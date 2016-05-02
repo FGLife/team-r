@@ -1,0 +1,28 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1462116653886.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "AB8E33D7",
+    "lastKnownWriteTime" : 6,
+    "last_content_update" : 1462116653886,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "y2im47xsxa",
+        "caption" : "power_producers_web",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=power_producers_web&cache_key=y2im47xsxa",
+        "displayedObservations" : "106",
+        "environment" : "",
+        "object" : "power_producers_web",
+        "totalObservations" : "106",
+        "variables" : "5"
+    },
+    "relative_order" : 5,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

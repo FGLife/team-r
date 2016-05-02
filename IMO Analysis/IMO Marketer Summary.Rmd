@@ -1,0 +1,338 @@
+---
+title: "IMO Marketer Summary"
+author: "Paul Tyler"
+date: "March 19, 2016"
+output:
+  html_document:
+    fig_width: 8
+    theme: united
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(xtable)
+library(stringi)
+library(ggplot2)
+```
+
+## Tucker Advisory Group
+
+###Summary
+
+####Activity in Last 30 days
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#set firm first
+#Focus_IMO <- "Advisors Excel Llc"
+#Focus_IMO <- "Aip Marketing Alliance Inc"
+#Focus_IMO <- "Ameri-Life"
+#Focus_IMO <- "Ann Arbor Annuity Exchange Llc"
+#Focus_IMO <- "Asurea Wholesale Ins Services"
+#Focus_IMO <- "Benefit Architects Inc"
+#Focus_IMO <- "Brokers International Ltd"
+#Focus_IMO <- "Collabrix Llc"
+#Focus_IMO <- "Creative One Marketing Corpora"
+#Focus_IMO <- "Dressander Bhc Inc"
+#Focus_IMO <- "Gradient Insurance Brokerage I"
+#Focus_IMO <- "Lead Masters Ins Marketing And"
+#Focus_IMO <- "Mv Group Inc"
+#Focus_IMO <- "Partners Advantage Ins Service"
+#Focus_IMO <- "Rawlings, Ronald"
+#Focus_IMO <- "Sunderland Group Ltd"
+#Focus_IMO <- "Superior Performers Inc Dba"
+Focus_IMO <- "Tucker Advisory Group"
+
+
+## Importing Hubspot data into R for Quarterly Report
+library(dplyr)
+
+## Preprocess files
+#read in marketers data file
+marketers <- read.csv(file="HS.csv", header=TRUE, sep=",")
+marketers.prior <- read.csv(file="HS-old.csv", header=TRUE, sep=",")
+
+##clean prior period files
+#pull only fields we need for prior numbers
+marketers.prior <- select(marketers.prior,
+                          Email,
+                          Emails.Delivered,
+                          Emails.Opened,
+                          Emails.Clicked,
+                          Number.of.Pageviews,
+                          Number.of.Visits
+                          )
+
+#renames fields to prep for merge
+marketers.prior <- rename(marketers.prior, Emails.Delivered.Prior = Emails.Delivered)
+marketers.prior <- rename(marketers.prior, Emails.Opened.Prior = Emails.Opened)
+marketers.prior <- rename(marketers.prior, Emails.Clicked.Prior = Emails.Clicked)
+marketers.prior <- rename(marketers.prior, Number.of.Pageviews.Prior = Number.of.Pageviews)
+marketers.prior <- rename(marketers.prior, Number.of.Visits.Prior = Number.of.Visits)
+
+#merges prior fields with most recent data
+marketers <- merge(marketers,marketers.prior)
+
+##cleans current file
+
+#date conversion from csv in date only format
+marketers$Last.email.open.date<-as.Date(marketers$Last.email.open.date, "%m/%d/%y")
+marketers$Last.email.click.date<-as.Date(marketers$Last.email.click.date, "%m/%d/%y")
+marketers$Time.of.Last.Session<-as.Date(marketers$Time.of.Last.Session, "%m/%d/%y")
+
+#add open rate calculation
+marketers$Open.Rate <-marketers$Emails.Opened / marketers$Emails.Delivered
+marketers$Open.Rate <- ifelse(is.na(marketers$Open.Rate),
+                                           0, marketers$Open.Rate )
+marketers$Emails.Delivered.Recent <- marketers$Emails.Delivered - marketers$Emails.Delivered.Prior
+marketers$Open.Rate.Recent <- (marketers$Emails.Opened - marketers$Emails.Opened.Prior)/(marketers$Emails.Delivered - marketers$Emails.Delivered.Prior)
+marketers$Open.Rate.Recent <- ifelse(is.na(marketers$Open.Rate.Recent),
+                                           0, marketers$Open.Rate.Recent)
+
+#adds true or false based on recency of activity
+marketers$Opened.In.Last.Week <- ifelse(marketers$Last.email.open.date > Sys.Date() - 30, "TRUE", "FALSE")
+marketers$Visited.In.Last.Week <- ifelse(marketers$Time.of.Last.Session > Sys.Date() - 30, "TRUE", "FALSE")
+
+#clears nulls from key fields
+
+#cleans column names
+marketers <- rename(marketers, SF.Top.Level.Account = Top.Level.Account)
+marketers <- rename(marketers, Top.Level.Account = Top.Level.Account..Text.)
+marketers <- rename(marketers, SF.Account.Name = Name)
+
+#title case conversion
+#load stringi
+library(stringi)
+marketers$Top.Level.Account <- stri_trans_totitle(marketers$Top.Level.Account)
+marketers$First.Name <- stri_trans_totitle(marketers$First.Name)
+marketers$Last.Name <- stri_trans_totitle(marketers$Last.Name)
+marketers$Company.Name <- stri_trans_totitle(marketers$Company.Name)
+marketers$MGA.Name <- stri_trans_totitle(marketers$MGA.Name)
+marketers$SF.Account.Name <- stri_trans_totitle(marketers$SF.Account.Name)
+
+
+#creates summary table by firm
+#distinct(select(marketers, Top.Level.Account))
+IMO_summary <- group_by(marketers, Top.Level.Account)
+IMO_summary <- summarise(IMO_summary, marketers = n(), 
+                         Opt_outs = sum(Opted.out.of.all.email == 'TRUE', na.rm=TRUE),
+                         mean_open = mean(Open.Rate.Recent),
+                         mean_open_hist = mean(Open.Rate),
+                         median_open = median(Open.Rate),
+                         max_open = max(Open.Rate),
+                         opened_mail = sum(Opened.In.Last.Week == 'TRUE', na.rm=TRUE),
+                         visited_web = sum(Visited.In.Last.Week == 'TRUE', na.rm=TRUE))
+
+#add open rate/visitation pct calculation
+IMO_summary$opened_mail_pct <- round(IMO_summary$opened_mail/IMO_summary$marketers, 2)
+IMO_summary$visited_web_pct <- round(IMO_summary$visited_web/IMO_summary$marketers, 2)
+
+IMO_summary$mean_open_hist <- round(IMO_summary$mean_open,2)
+IMO_summary$median_open <- round(IMO_summary$median_open, 2)
+IMO_summary$max_open <- round(IMO_summary$max_open, 2)
+
+##Activity in Last Two Weeks
+
+IMO_drilldown <- subset(IMO_summary, IMO_summary$Top.Level.Account==Focus_IMO)
+
+IMO_drilldown <- select(IMO_drilldown,
+                        marketers,
+                        Opt_outs,
+                        opened_mail_pct,
+                        visited_web_pct
+                        )
+
+IMO_drilldown[,c(3,4)]
+#print(xtable::xtable(IMO_drilldown[,c(3,4)]),type="html",html.table.attributes="border=1")
+
+```
+
+####Historical Activity
+
+```{r  echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+IMO_drilldown[,c(1,2)]
+#print(xtable::xtable(IMO_drilldown[,c(1,2)]),type="html",html.table.attributes="border=1")
+```
+
+
+###Detail
+
+####Activity in Last 30 Days
+
+Email Opens
+
+```{r  echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+##Email Opens
+IMO_drilldown_detail <- subset(marketers, marketers$Top.Level.Account==Focus_IMO)
+IMO_drilldown_detail$First.Name <-strtrim(IMO_drilldown_detail$First.Name,12)
+IMO_drilldown_detail$Last.Name <-strtrim(IMO_drilldown_detail$Last.Name,12)
+IMO_drilldown_detail.opens <- select(IMO_drilldown_detail,
+                                     First.Name, Last.Name, SF.Account.Name, Emails.Delivered.Recent, Open.Rate.Recent, Open.Rate, Market.Influencer, Emails.Delivered.Recent)
+IMO_drilldown_detail.opens <- IMO_drilldown_detail.opens[order(-IMO_drilldown_detail.opens$Open.Rate, IMO_drilldown_detail.opens$Last.Name),]
+IMO_drilldown_detail.opens$Open.Rate <- round(IMO_drilldown_detail.opens$Open.Rate, digits = 2)
+
+IMO_drilldown_detail.email <- subset(IMO_drilldown_detail, 
+                                 IMO_drilldown_detail$Opened.In.Last.Week=="TRUE")
+colnames(IMO_drilldown_detail.email)[colnames(IMO_drilldown_detail.email)=="Last.email.open.date"] <- "Last.email"
+IMO_drilldown_detail.email <- IMO_drilldown_detail.email[order(IMO_drilldown_detail.email$Last.Name),]
+
+IMO_drilldown_detail.email <- select(IMO_drilldown_detail.email,
+                                     First.Name, Last.Name, Market.Influencer,Last.email)
+
+IMO_drilldown_detail.email
+
+#print(xtable::xtable(IMO_drilldown_detail.email),type="html",html.table.attributes="border=1")
+```
+
+Website Visits
+
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+IMO_drilldown_detail.web <- subset(IMO_drilldown_detail, IMO_drilldown_detail$Visited.In.Last.Week=="TRUE")
+colnames(IMO_drilldown_detail.web)[colnames(IMO_drilldown_detail.web)=="Last.email.open.date"] <- "Last.email"
+colnames(IMO_drilldown_detail.web)[colnames(IMO_drilldown_detail.web)=="Time.of.Last.Session"] <- "Last.session"
+IMO_drilldown_detail.web <- IMO_drilldown_detail.web[order(IMO_drilldown_detail.web$Last.Name),]
+IMO_drilldown_detail.web$Last.Page.Seen <- substr(IMO_drilldown_detail.web$Last.Page.Seen, 9, 55)
+
+IMO_detail.web <- select(IMO_drilldown_detail.web,
+                         First.Name, Last.Name, Average.Pageviews, Last.Page.Seen)
+
+print(xtable::xtable(IMO_detail.web),type="html",html.table.attributes="border=1")
+```
+
+####Historical Engagement by Marketers
+
+By Opens
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+print(xtable::xtable(IMO_drilldown_detail.opens[,c(1,2,3,7,6,5,4)]),type="html",html.table.attributes="border=1")
+
+```
+
+By Firm
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+IMO_drilldown_detail.opens <- IMO_drilldown_detail.opens[order(IMO_drilldown_detail.opens$SF.Account.Name, -IMO_drilldown_detail.opens$Open.Rate, IMO_drilldown_detail.opens$Last.Name),]
+#IMO_detail.opens[,c(1,2,3,4)]
+print(xtable::xtable(IMO_drilldown_detail.opens[,c(1,2,3,7,6,5,4)]),type="html",html.table.attributes="border=1")
+
+```
+Marketers Currently Opted Out of Email
+
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+IMO_drilldown_detail.optouts <- subset(IMO_drilldown_detail, 
+                                   IMO_drilldown_detail$Opted.out.of.all.email=="TRUE")
+IMO_drilldown_detail.optouts <- select(IMO_drilldown_detail.optouts,
+                                       Email, First.Name, Last.Name)
+print(xtable::xtable(IMO_drilldown_detail.optouts),type="html",html.table.attributes="border=1")
+
+```
+
+Salesforce Account Summary
+
+
+```{r results='asis', echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+IMO_drilldown_detail_sf <-group_by(IMO_drilldown_detail, SF.Account.Name)
+IMO_drilldown_detail_sf <- summarise(IMO_drilldown_detail_sf, 
+                         marketers = n(), 
+                         mean_open = round(mean(Open.Rate, na.rm = TRUE),2),
+                         mean_open_recent = round(mean(Open.Rate.Recent, na.rm = TRUE),2),
+                         annuity_sales = mean(YTD.Annuity, na.rm=TRUE),
+                         life_sales = mean(YTD.Life, na.rm=TRUE)
+)
+
+#### Merging sf activity history
+# new sf
+activity <- read.csv(file="AccountActivities.csv", header=TRUE, sep=",")
+#date conversion from csv in date only format
+activity$Date <-as.Date(activity$Date, "%m/%d/%y")
+activity <- subset(activity, Date >= "2015-1-1")
+activity <- rename(activity, SF.Account.Name = Top.Level.Account)
+activity$SF.Account.Name <- stri_trans_totitle(activity$SF.Account.Name)
+
+activity_summary <- group_by(activity, SF.Account.Name)
+activity_summary <- summarise (activity_summary, 
+                               Calls = n()
+)
+
+IMO_drilldown_detail_sf <- left_join(IMO_drilldown_detail_sf,activity_summary, by = "SF.Account.Name")
+
+IMO_drilldown_detail_sf <- IMO_drilldown_detail_sf[order(-IMO_drilldown_detail_sf$annuity_sales),]
+print(xtable::xtable(IMO_drilldown_detail_sf, digits=c(0,0,0,2,2,0,0,0)),type="html",html.table.attributes="border=1")
+
+```
+
+###Social Presence
+
+Twitter and Facebook
+```{r results='asis', echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# web
+sf_acct_web <- read.csv(file="SF_Account_Web.csv", header=TRUE, sep=",")
+sf_acct_web$SF.Account.Name <- as.character(sf_acct_web$SF.Account.Name)
+sf_acct_web$Twitter <- as.character(sf_acct_web$Twitter)
+sf_acct_web$Facebook <- as.character(sf_acct_web$Facebook)
+sf_acct_web$LinkedIn <- as.character(sf_acct_web$LinkedIn)
+sf_acct_web$Website <- as.character(sf_acct_web$Website)
+sf_acct_web <- select (sf_acct_web,
+                                    SF.Account.Name,
+                                    Twitter,
+                                    Facebook,
+                                    LinkedIn,
+                                    Website)
+
+IMO_drilldown_detail_web <- left_join(IMO_drilldown_detail_sf,sf_acct_web, by = "SF.Account.Name")
+social1 <- select (IMO_drilldown_detail_web,
+                   SF.Account.Name,
+                   Twitter,
+                   Facebook)
+
+print(xtable::xtable(social1),type="html",html.table.attributes="border=1")
+```
+###
+
+LinkedIn and Web
+
+```{r results='asis', echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+social2 <- select (IMO_drilldown_detail_web,
+                   SF.Account.Name,
+                   LinkedIn,
+                   Website)
+print(xtable::xtable(social2),type="html",html.table.attributes="border=1")
+```
+
+
+
+```{r  echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+
+ggplot(IMO_drilldown_detail_sf, aes(x=annuity_sales, y=mean_open, size=marketers)) +
+    geom_point(shape=1) +    # Use hollow circles
+    geom_smooth(method=lm,   # Add linear regression line
+                se=FALSE, show_guide = FALSE)+
+  ggtitle("Annuity Sales by Marketer Engagement by Salesforce Account") 
+```
+
+```{r  echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE)
+
+ggplot(IMO_drilldown_detail_sf, aes(x=life_sales, y=mean_open, size=marketers)) +
+    geom_point(shape=1) +    # Use hollow circles
+    geom_smooth(method=lm,   # Add linear regression line
+                se=FALSE, show_guide = FALSE)+
+  ggtitle("Life Sales By Marketer Engagement by Salesforce Account") 
+```
+

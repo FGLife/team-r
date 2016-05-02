@@ -1,0 +1,121 @@
+---
+title: "Marketer Opt Outs"
+author: "Paul Tyler"
+date: "April 26, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(xtable)
+library(stringi)
+library(ggplot2)
+```
+
+###Opt-outs by Firm
+
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+## Opt outs by IMOs
+
+## Preprocess files
+#read in marketers data file
+marketers <- read.csv(file="HS.csv", header=TRUE, sep=",")
+marketers.prior <- read.csv(file="HS-old.csv", header=TRUE, sep=",")
+SF_Tracking <- read.csv(file="SF_Tracking.csv", header=TRUE, sep=",")
+
+##clean prior period files
+#pull only fields we need for prior numbers
+marketers.prior <- select(marketers.prior,
+                          Email,
+                          Emails.Delivered,
+                          Emails.Opened,
+                          Emails.Clicked,
+                          Number.of.Pageviews,
+                          Number.of.Visits
+                          )
+
+#renames fields to prep for merge
+marketers.prior <- rename(marketers.prior, Emails.Delivered.Prior = Emails.Delivered)
+marketers.prior <- rename(marketers.prior, Emails.Opened.Prior = Emails.Opened)
+marketers.prior <- rename(marketers.prior, Emails.Clicked.Prior = Emails.Clicked)
+marketers.prior <- rename(marketers.prior, Number.of.Pageviews.Prior = Number.of.Pageviews)
+marketers.prior <- rename(marketers.prior, Number.of.Visits.Prior = Number.of.Visits)
+
+#merges prior fields with most recent data
+marketers <- merge(marketers,marketers.prior)
+##cleans current file
+
+#date conversion from csv in date only format
+marketers$Last.email.open.date<-as.Date(marketers$Last.email.open.date, "%m/%d/%y")
+marketers$Last.email.click.date<-as.Date(marketers$Last.email.click.date, "%m/%d/%y")
+marketers$Time.of.Last.Session<-as.Date(marketers$Time.of.Last.Session, "%m/%d/%y")
+
+#add open rate calculation
+marketers$Open.Rate <-marketers$Emails.Opened / marketers$Emails.Delivered
+marketers$Open.Rate <- ifelse(is.na(marketers$Open.Rate),
+                                           0, marketers$Open.Rate )
+marketers$Emails.Delivered.Recent <- marketers$Emails.Delivered - marketers$Emails.Delivered.Prior
+marketers$Open.Rate.Recent <- (marketers$Emails.Opened - marketers$Emails.Opened.Prior)/(marketers$Emails.Delivered - marketers$Emails.Delivered.Prior)
+marketers$Open.Rate.Recent <- ifelse(is.na(marketers$Open.Rate.Recent),
+                                           0, marketers$Open.Rate.Recent)
+
+#adds true or false based on recency of activity
+marketers$Opened.In.Last.Week <- ifelse(marketers$Last.email.open.date > Sys.Date() - 30, "TRUE", "FALSE")
+marketers$Visited.In.Last.Week <- ifelse(marketers$Time.of.Last.Session > Sys.Date() - 30, "TRUE", "FALSE")
+
+#clears nulls from key fields
+
+#cleans column names
+marketers <- rename(marketers, SF.Top.Level.Account = Top.Level.Account)
+marketers <- rename(marketers, Top.Level.Account = Top.Level.Account..Text.)
+marketers <- rename(marketers, SF.Account.Name = Name)
+
+#title case conversion
+#load stringi
+library(stringi)
+marketers$Top.Level.Account <- stri_trans_totitle(marketers$Top.Level.Account)
+marketers$First.Name <- stri_trans_totitle(marketers$First.Name)
+marketers$Last.Name <- stri_trans_totitle(marketers$Last.Name)
+marketers$Company.Name <- stri_trans_totitle(marketers$Company.Name)
+marketers$MGA.Name <- stri_trans_totitle(marketers$MGA.Name)
+marketers$SF.Account.Name <- stri_trans_totitle(marketers$SF.Account.Name)
+
+
+#creates summary table by firm
+#distinct(select(marketers, Top.Level.Account))
+IMO_summary <- group_by(marketers, Top.Level.Account)
+IMO_summary <- summarise(IMO_summary, 
+                         marketers = n(), 
+                         Opt_outs = sum(Opted.out.of.all.email == 'TRUE', na.rm=TRUE),
+                         Opt_outs_pct = round(Opt_outs / marketers,2)
+                         )
+
+IMO_summary <- subset(IMO_summary, Opt_outs > 0)
+
+IMO_summary <- IMO_summary[order(-IMO_summary$Opt_outs),]
+
+print(xtable::xtable(IMO_summary),type="html",html.table.attributes="border=1")
+```
+
+###Individual marketers
+
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+marketers_out <- subset(marketers, Opted.out.of.all.email == 'TRUE')
+
+marketers_out <- select (marketers_out,
+                         Top.Level.Account,
+                         SF.Account.Name,
+                         Last.Name,
+                         First.Name,
+                         Email)
+
+marketers_out <- marketers_out[order(marketers_out$Top.Level.Account,
+                                     marketers_out$SF.Account.Name, 
+                                     marketers_out$Last.Name),]
+
+print(xtable::xtable(marketers_out),type="html",html.table.attributes="border=1")
+```

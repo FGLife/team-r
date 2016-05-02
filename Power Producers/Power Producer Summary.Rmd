@@ -1,0 +1,198 @@
+---
+title: "Power Producer Summary"
+author: "Paul Tyler"
+date: "May 1, 2016"
+output:
+  html_document:
+    fig_width: 8
+    theme: united
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(xtable)
+library(stringi)
+library(ggplot2)
+```
+
+## Power Producers
+
+###Summary
+
+####By Affiliated IMO
+
+```{r results = 'asis', echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+##############################################
+#
+#### Power Producer Summary ####
+#
+##############################################
+
+## Importing Hubspot data into R for Quarterly Report
+library(dplyr)
+library(stringi)
+library(xtable)
+
+## Preprocess files
+#read in power_producers data file
+power_producers <- read.csv(file="power_producer.csv", header=TRUE, sep=",")
+power_producers.prior <- read.csv(file="power_producer-old.csv", header=TRUE, sep=",")
+power_producers_web <- read.csv(file="power_producer_attendees.csv", header=TRUE, sep=",")
+
+
+##clean prior period files
+#pull only fields we need for prior numbers
+power_producers.prior <- select(power_producers.prior,
+                          Email,
+                          Emails.Delivered,
+                          Emails.Opened,
+                          Emails.Clicked,
+                          Number.of.Pageviews,
+                          Number.of.Visits
+)
+
+power_producers_web <- select(power_producers_web,
+                              Email,
+                              Website,
+                              Facebook,
+                              Twitter,
+                              LinkedIn
+)
+
+#renames fields to prep for merge
+power_producers.prior <- rename(power_producers.prior, Emails.Delivered.Prior = Emails.Delivered)
+power_producers.prior <- rename(power_producers.prior, Emails.Opened.Prior = Emails.Opened)
+power_producers.prior <- rename(power_producers.prior, Emails.Clicked.Prior = Emails.Clicked)
+power_producers.prior <- rename(power_producers.prior, Number.of.Pageviews.Prior = Number.of.Pageviews)
+power_producers.prior <- rename(power_producers.prior, Number.of.Visits.Prior = Number.of.Visits)
+
+
+#merges prior fields with most recent data
+power_producers <- merge(power_producers,power_producers.prior)
+power_producers <- merge (power_producers,power_producers_web)
+
+##cleans current file
+
+#date conversion from csv in date only format
+power_producers$Last.email.open.date<-as.Date(power_producers$Last.email.open.date, "%m/%d/%y")
+power_producers$Last.email.click.date<-as.Date(power_producers$Last.email.click.date, "%m/%d/%y")
+power_producers$Time.of.Last.Session<-as.Date(power_producers$Time.of.Last.Session, "%m/%d/%y")
+
+#add open rate calculation
+power_producers$Open.Rate <-power_producers$Emails.Opened / power_producers$Emails.Delivered
+power_producers$Open.Rate <- ifelse(is.na(power_producers$Open.Rate),
+                              0, power_producers$Open.Rate )
+
+#adds true or false based on recency of activity
+power_producers$Opened.In.Last.Week <- ifelse(power_producers$Last.email.open.date > Sys.Date() - 30, "TRUE", "FALSE")
+power_producers$Visited.In.Last.Week <- ifelse(power_producers$Time.of.Last.Session > Sys.Date() - 30, "TRUE", "FALSE")
+
+#clears nulls from key fields
+
+#cleans column names
+power_producers <- rename(power_producers, SF.Top.Level.Account = Top.Level.Account)
+power_producers <- rename(power_producers, Top.Level.Account = Top.Level.Account..Text.)
+power_producers <- rename(power_producers, SF.Account.Name = Name)
+
+#title case conversion
+
+power_producers$Top.Level.Account <- stri_trans_totitle(power_producers$Top.Level.Account)
+power_producers$First.Name <- stri_trans_totitle(power_producers$First.Name)
+power_producers$Last.Name <- stri_trans_totitle(power_producers$Last.Name)
+power_producers$Company.Name <- stri_trans_totitle(power_producers$Company.Name)
+power_producers$MGA.Name <- stri_trans_totitle(power_producers$MGA.Name)
+power_producers$SF.Account.Name <- stri_trans_totitle(power_producers$SF.Account.Name)
+
+#creates summary table by firm
+#distinct(select(power_producers, Top.Level.Account))
+IMO_summary <- group_by(power_producers, Top.Level.Account)
+IMO_summary <- summarise(IMO_summary, power_producers = n(), 
+                         Opt_outs = sum(Opted.out.of.all.email == 'true', na.rm=TRUE),
+                         mean_open = mean(Open.Rate),
+                         opened_mail = sum(Opened.In.Last.Week == 'TRUE', na.rm=TRUE),
+                         visited_web = sum(Visited.In.Last.Week == 'TRUE', na.rm=TRUE))
+
+#add open rate/visitation pct calculation
+IMO_summary$opened_mail_pct <- round(IMO_summary$opened_mail/IMO_summary$power_producers, 2)
+IMO_summary$visited_web_pct <- round(IMO_summary$visited_web/IMO_summary$power_producers, 2)
+IMO_summary$mean_open <- round(IMO_summary$mean_open,2)
+IMO_summary <- IMO_summary[order(-IMO_summary$power_producers),]
+
+print(xtable::xtable(IMO_summary[,c(1,2,3,4,5,6)]),type="html",html.table.attributes="border=1")
+
+```
+
+####Opt outs
+
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+IMO_drilldown_detail.optouts <- subset(power_producers, power_producers$Opted.out.of.all.email=="true")
+
+IMO_drilldown_detail.optouts <- select(IMO_drilldown_detail.optouts,
+                                       Email, First.Name, Last.Name)
+print(xtable::xtable(IMO_drilldown_detail.optouts),type="html",html.table.attributes="border=1")
+
+```
+
+####Engagement
+
+By Opens
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+##Email Opens
+IMO_summary_detail <- power_producers
+IMO_summary_detail$First.Name <-strtrim(IMO_summary_detail$First.Name,12)
+IMO_summary_detail$Last.Name <-strtrim(IMO_summary_detail$Last.Name,12)
+IMO_summary_detail.opens <- select(IMO_summary_detail,
+                                   First.Name, Last.Name, Top.Level.Account, Open.Rate)
+IMO_summary_detail.opens <- IMO_summary_detail.opens[order(-IMO_summary_detail.opens$Open.Rate, IMO_summary_detail.opens$Last.Name),]
+IMO_summary_detail.opens$Open.Rate <- round(IMO_summary_detail.opens$Open.Rate, digits = 2)
+
+print(xtable::xtable(IMO_summary_detail.opens),type="html",html.table.attributes="border=1")
+
+```
+
+###Social Presence
+
+####Facebook and LinkedIn
+```{r results='asis', echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+power_producers$Twitter <- as.character(power_producers$Twitter)
+power_producers$LinkedIn <- as.character(power_producers$LinkedIn)
+power_producers$Website <- as.character(power_producers$Website)
+power_producers_social <- select (power_producers,
+                       Last.Name,
+                       First.Name,
+                       Twitter,
+                       Facebook,
+                       LinkedIn,
+                       Website)
+power_producers_social <- power_producers_social[order(power_producers_social$Last.Name),]
+social1 <- select (power_producers_social,
+                   Last.Name,
+                   First.Name,
+                   Facebook,
+                   LinkedIn)
+
+print(xtable::xtable(social1),type="html",html.table.attributes="border=1")
+```
+####Website and Twitter
+
+```{r results='asis', echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+social2 <- select (power_producers_social,
+                   Last.Name,
+                   First.Name,
+                   Website,
+                   Twitter)
+
+print(xtable::xtable(social2),type="html",html.table.attributes="border=1")
+```

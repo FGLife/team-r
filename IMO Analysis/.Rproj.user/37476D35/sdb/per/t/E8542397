@@ -1,0 +1,28 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1461727099667.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "E8542397",
+    "lastKnownWriteTime" : 4294967302,
+    "last_content_update" : 1461727099667,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "muajuho3up",
+        "caption" : "marketers_out",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=marketers_out&cache_key=muajuho3up",
+        "displayedObservations" : 57,
+        "environment" : "",
+        "object" : "marketers_out",
+        "totalObservations" : 57,
+        "variables" : 6
+    },
+    "relative_order" : 9,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}
