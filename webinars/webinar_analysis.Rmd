@@ -1,0 +1,130 @@
+---
+title: "FGL Product Webinar Analysis"
+author: "Paul Tyler"
+date: "May 13, 2016"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(stringi)
+library(stringr)
+library(ggplot2)
+library(xtable)
+options(xtable.floating = FALSE)
+options(xtable.timestamp = "")
+webinars <- read.csv(file = "webinars.csv", header = TRUE, sep = ",")
+all_emails <-read.csv(file = "all_emails.csv", header = TRUE, sep = ",")
+
+#clean data
+webinars$Last.Name<- stri_trans_totitle(webinars$Last.Name)
+webinars$First.Name<- stri_trans_totitle(webinars$First.Name)
+webinars <- rename(webinars, Email = Email.Address)
+webinars$Time.in.Session <- str_replace(webinars$Time.in.Session, " minutes", "")
+webinars$Time.in.Session <- as.numeric(webinars$Time.in.Session)
+
+fglife <- webinars[grep("fglife.com", webinars$Email, perl=TRUE), ]
+webinars <- webinars[!grepl("fglife", webinars$Email, perl=TRUE),]
+```
+
+#### Webinar summary
+
+Gary, this document includes analysis of the data you shared with us for the six most recent webinars. As you share the results of each future webinar, Betsy can add the data and rerun the analysis to track future growth and engagement. In total, 712 individuals signed up to attend at least one of the six seminars. Of the 712 individuals who registered, **261 were either new contacts or old contacts using different email addresses.** I suggest you work with Betsy and probably segment as "webinar attendees" and be sure to include them on future emails promoting similar webinars. Note that some of the attendees self-identified themselves as affiliated with IMOs that don't want us to email to agents. You held the audience best with the webinar "Prosperity Elite - Get the Facts." The very last webinar, "Safe Income Plus - Dare to Compare" lost the bulk of the audience about halfway through the discussion. Do you have any idea why?
+
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#overview
+webinar_summary <- group_by(webinars,Webinar.Name)
+webinar_summary <- summarise(webinar_summary,
+                             Date = first(Webinar.Date),
+                             Registered = n(),
+                             Attended.Call = sum(Attended == 'Yes', na.rm=TRUE),
+                             Avg.Listen = round(mean(Time.in.Session, na.rm=TRUE ),digits =1))
+webinar_summary <- webinar_summary[order(webinar_summary$Date),]
+xtable(webinar_summary)
+```
+\pagebreak
+
+#### Core audience
+
+It looks like your are starting to build a dedicated audience. We found that 26 people have attended 3 or more webinars. Do we know these individuals? Have reached out by phone to speak with them? Do we want to send FGL-branded gifts to them with a personal note? Ideally, we should build on feedback provided by this group.
+
+```{r results='asis',echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#combined registration and attendance list
+webinars_repeater <- group_by(webinars, Email)
+webinars_repeater <- summarise(webinars_repeater,
+                          Last.Name = first(Last.Name),
+                          First.Name = first(First.Name),
+                          IMO = first(Marketing.Organization),
+                          Registered = n(),
+                          Attended.Call = sum(Attended == 'Yes', na.rm=TRUE),
+                          Avg.Engagement = round(sum(Interest.Rating) /Attended.Call,digits =1)
+                          )
+webinars_repeater <- webinars_repeater[order(-webinars_repeater$Attended, webinars_repeater$Last.Name),]
+
+#passionate audience?
+webinar_lovers <- subset(webinars_repeater,Attended.Call > 2)
+webinar_lovers <- select(webinar_lovers,
+                         Last.Name,
+                         First.Name,
+                         IMO,
+                         Email,
+                         Webinars.Attended = Attended.Call,
+                         Avg.Engagement)
+webinar_lovers <- webinar_lovers[order(webinar_lovers$Last.Name),]
+
+#histogram of agents/marketers by number of webinars attended
+repeats <- ggplot(webinars_repeater, aes(Attended.Call))
+repeats <- repeats + geom_histogram(binwidth = 1)
+repeats <- repeats + xlab("Number of Webinars Attended")
+repeats <- repeats + ylab("Attendees") + ggtitle("Repeat Attendees by Cohort")
+repeats
+
+```
+\pagebreak
+
+**Most Frequent Attendees**
+
+```{r results='asis', echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+xtable(webinar_lovers)
+```
+
+\pagebreak
+
+####Seminar detail
+
+The charts and tables below provide detailed information for each seminar in the dataset.
+
+```{r results='asis', echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+for (topic in webinar_summary$Webinar.Name) {
+  webinar_single <- subset(webinars,Webinar.Name == topic & Attended == "Yes")
+
+  time_on_call <-ggplot(webinar_single, aes(Time.in.Session))
+  time_on_call <- time_on_call + geom_histogram(binwidth = 5)
+  time_on_call <- time_on_call + xlab("Minutes Listened")
+  time_on_call <- time_on_call + ylab("Attendees") + ggtitle(topic)
+  
+  print(time_on_call)
+  
+  
+  webinar_single_lovers <- select(webinar_single,
+                                  Last.Name,
+                                  First.Name,
+                                  IMO = Marketing.Organization,
+                                  Email,
+                                  Time = Time.in.Session
+  )
+  webinar_single_lovers <- webinar_single_lovers[order(-webinar_single_lovers$Time),]
+  print(xtable(webinar_single_lovers[1:10,], digits = 0))
+}
+
+```
+
+
